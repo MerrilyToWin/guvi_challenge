@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,16 +11,12 @@
 
 namespace Predis\Connection\Replication;
 
-use InvalidArgumentException;
 use Predis\ClientException;
-use Predis\Command\Command;
 use Predis\Command\CommandInterface;
 use Predis\Command\RawCommand;
-use Predis\Connection\AbstractAggregateConnection;
 use Predis\Connection\ConnectionException;
 use Predis\Connection\FactoryInterface;
 use Predis\Connection\NodeConnectionInterface;
-use Predis\Connection\ParametersInterface;
 use Predis\Replication\MissingMasterException;
 use Predis\Replication\ReplicationStrategy;
 use Predis\Response\ErrorInterface as ResponseErrorInterface;
@@ -29,8 +24,10 @@ use Predis\Response\ErrorInterface as ResponseErrorInterface;
 /**
  * Aggregate connection handling replication of Redis nodes configured in a
  * single master / multiple slaves setup.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-class MasterSlaveReplication extends AbstractAggregateConnection implements ReplicationInterface
+class MasterSlaveReplication implements ReplicationInterface
 {
     /**
      * @var ReplicationStrategy
@@ -45,17 +42,17 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $slaves = [];
+    protected $slaves = array();
 
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $pool = [];
+    protected $pool = array();
 
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $aliases = [];
+    protected $aliases = array();
 
     /**
      * @var NodeConnectionInterface
@@ -75,7 +72,7 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
     /**
      * {@inheritdoc}
      */
-    public function __construct(?ReplicationStrategy $strategy = null)
+    public function __construct(ReplicationStrategy $strategy = null)
     {
         $this->strategy = $strategy ?: new ReplicationStrategy();
     }
@@ -191,7 +188,9 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
      */
     public function getConnectionById($id)
     {
-        return $this->pool[$id] ?? null;
+        if (isset($this->pool[$id])) {
+            return $this->pool[$id];
+        }
     }
 
     /**
@@ -203,7 +202,9 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
      */
     public function getConnectionByAlias($alias)
     {
-        return $this->aliases[$alias] ?? null;
+        if (isset($this->aliases[$alias])) {
+            return $this->aliases[$alias];
+        }
     }
 
     /**
@@ -220,8 +221,6 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
         } elseif ($role === 'slave') {
             return $this->pickSlave();
         }
-
-        return null;
     }
 
     /**
@@ -236,7 +235,7 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
         }
 
         if ($connection !== $this->master && !in_array($connection, $this->slaves, true)) {
-            throw new InvalidArgumentException('Invalid connection or connection not found.');
+            throw new \InvalidArgumentException('Invalid connection or connection not found.');
         }
 
         $this->current = $connection;
@@ -248,7 +247,7 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
     public function switchToMaster()
     {
         if (!$connection = $this->getConnectionByRole('master')) {
-            throw new InvalidArgumentException('Invalid connection or connection not found.');
+            throw new \InvalidArgumentException('Invalid connection or connection not found.');
         }
 
         $this->switchTo($connection);
@@ -260,7 +259,7 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
     public function switchToSlave()
     {
         if (!$connection = $this->getConnectionByRole('slave')) {
-            throw new InvalidArgumentException('Invalid connection or connection not found.');
+            throw new \InvalidArgumentException('Invalid connection or connection not found.');
         }
 
         $this->switchTo($connection);
@@ -317,15 +316,13 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
     /**
      * Returns a random slave.
      *
-     * @return NodeConnectionInterface|null
+     * @return NodeConnectionInterface
      */
     protected function pickSlave()
     {
-        if (!$this->slaves) {
-            return null;
+        if ($this->slaves) {
+            return $this->slaves[array_rand($this->slaves)];
         }
-
-        return $this->slaves[array_rand($this->slaves)];
     }
 
     /**
@@ -371,14 +368,14 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
      */
     private function handleInfoResponse($response)
     {
-        $info = [];
+        $info = array();
 
         foreach (preg_split('/\r?\n/', $response) as $row) {
             if (strpos($row, ':') === false) {
                 continue;
             }
 
-            [$k, $v] = explode(':', $row, 2);
+            list($k, $v) = explode(':', $row, 2);
             $info[$k] = $v;
         }
 
@@ -394,19 +391,18 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
             throw new ClientException('Discovery requires a connection factory');
         }
 
-        while (true) {
+        RETRY_FETCH: {
             try {
                 if ($connection = $this->getMaster()) {
                     $this->discoverFromMaster($connection, $this->connectionFactory);
-                    break;
                 } elseif ($connection = $this->pickSlave()) {
                     $this->discoverFromSlave($connection, $this->connectionFactory);
-                    break;
                 } else {
                     throw new ClientException('No connection available for discovery');
                 }
             } catch (ConnectionException $exception) {
                 $this->remove($connection);
+                goto RETRY_FETCH;
             }
         }
     }
@@ -426,17 +422,17 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
             throw new ClientException("Role mismatch (expected master, got slave) [$connection]");
         }
 
-        $this->slaves = [];
+        $this->slaves = array();
 
         foreach ($replication as $k => $v) {
             $parameters = null;
 
             if (strpos($k, 'slave') === 0 && preg_match('/ip=(?P<host>.*),port=(?P<port>\d+)/', $v, $parameters)) {
-                $slaveConnection = $connectionFactory->create([
+                $slaveConnection = $connectionFactory->create(array(
                     'host' => $parameters['host'],
                     'port' => $parameters['port'],
                     'role' => 'slave',
-                ]);
+                ));
 
                 $this->add($slaveConnection);
             }
@@ -458,11 +454,11 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
             throw new ClientException("Role mismatch (expected slave, got master) [$connection]");
         }
 
-        $masterConnection = $connectionFactory->create([
+        $masterConnection = $connectionFactory->create(array(
             'host' => $replication['master_host'],
             'port' => $replication['master_port'],
             'role' => 'master',
-        ]);
+        ));
 
         $this->add($masterConnection);
 
@@ -479,7 +475,7 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
      */
     private function retryCommandOnFailure(CommandInterface $command, $method)
     {
-        while (true) {
+        RETRY_COMMAND: {
             try {
                 $connection = $this->getConnectionByCommand($command);
                 $response = $connection->$method($command);
@@ -487,8 +483,6 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
                 if ($response instanceof ResponseErrorInterface && $response->getErrorType() === 'LOADING') {
                     throw new ConnectionException($connection, "Redis is loading the dataset in memory [$connection]");
                 }
-
-                break;
             } catch (ConnectionException $exception) {
                 $connection = $exception->getConnection();
                 $connection->disconnect();
@@ -510,12 +504,16 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
                 } elseif ($this->autoDiscovery) {
                     $this->discover();
                 }
+
+                goto RETRY_COMMAND;
             } catch (MissingMasterException $exception) {
                 if ($this->autoDiscovery) {
                     $this->discover();
                 } else {
                     throw $exception;
                 }
+
+                goto RETRY_COMMAND;
             }
         }
 
@@ -551,24 +549,6 @@ class MasterSlaveReplication extends AbstractAggregateConnection implements Repl
      */
     public function __sleep()
     {
-        return ['master', 'slaves', 'pool', 'aliases', 'strategy'];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getParameters(): ?ParametersInterface
-    {
-        if (isset($this->master)) {
-            return $this->master->getParameters();
-        }
-
-        $slave = $this->pickSlave();
-
-        if (null !== $slave) {
-            return $slave->getParameters();
-        }
-
-        return null;
+        return array('master', 'slaves', 'pool', 'aliases', 'strategy');
     }
 }

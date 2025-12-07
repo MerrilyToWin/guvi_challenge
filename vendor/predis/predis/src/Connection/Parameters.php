@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,34 +11,25 @@
 
 namespace Predis\Connection;
 
-use InvalidArgumentException;
-
 /**
  * Container for connection parameters used to initialize connections to Redis.
  *
  * {@inheritdoc}
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Parameters implements ParametersInterface
 {
-    protected static $defaults = [
+    protected static $defaults = array(
         'scheme' => 'tcp',
         'host' => '127.0.0.1',
         'port' => 6379,
-        'protocol' => 2,
-    ];
-
-    /**
-     * Set of connection parameters already filtered
-     * for NULL or 0-length string values.
-     *
-     * @var array
-     */
-    protected $parameters;
+    );
 
     /**
      * @param array $parameters Named array of connection parameters.
      */
-    public function __construct(array $parameters = [])
+    public function __construct(array $parameters = array())
     {
         $this->parameters = $this->filter($parameters + static::$defaults);
     }
@@ -72,7 +62,7 @@ class Parameters implements ParametersInterface
             $parameters = static::parse($parameters);
         }
 
-        return new static($parameters ?: []);
+        return new static($parameters ?: array());
     }
 
     /**
@@ -84,13 +74,14 @@ class Parameters implements ParametersInterface
      * database number in the "path" part these values override the values of
      * "password" and "database" if they are present in the "query" part.
      *
-     * @see http://www.iana.org/assignments/uri-schemes/prov/redis
-     * @see http://www.iana.org/assignments/uri-schemes/prov/rediss
+     * @link http://www.iana.org/assignments/uri-schemes/prov/redis
+     * @link http://www.iana.org/assignments/uri-schemes/prov/rediss
      *
      * @param string $uri URI string.
      *
+     * @throws \InvalidArgumentException
+     *
      * @return array
-     * @throws InvalidArgumentException
      */
     public static function parse($uri)
     {
@@ -101,7 +92,7 @@ class Parameters implements ParametersInterface
         }
 
         if (!$parsed = parse_url($uri)) {
-            throw new InvalidArgumentException("Invalid parameters URI: $uri");
+            throw new \InvalidArgumentException("Invalid parameters URI: $uri");
         }
 
         if (
@@ -166,11 +157,6 @@ class Parameters implements ParametersInterface
         }
     }
 
-    public function __set($parameter, $value)
-    {
-        $this->parameters[$parameter] = $value;
-    }
-
     /**
      * {@inheritdoc}
      */
@@ -200,6 +186,6 @@ class Parameters implements ParametersInterface
      */
     public function __sleep()
     {
-        return ['parameters'];
+        return array('parameters');
     }
 }

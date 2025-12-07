@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,10 +11,12 @@
 
 namespace Predis\Command\Redis;
 
-use Predis\Command\PrefixableCommand as RedisCommand;
+use Predis\Command\Command as RedisCommand;
 
 /**
- * @see http://redis.io/commands/sort
+ * @link http://redis.io/commands/sort
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class SORT extends RedisCommand
 {
@@ -38,7 +39,7 @@ class SORT extends RedisCommand
             return;
         }
 
-        $query = [$arguments[0]];
+        $query = array($arguments[0]);
         $sortParams = array_change_key_case($arguments[1], CASE_UPPER);
 
         if (isset($sortParams['BY'])) {
@@ -60,9 +61,9 @@ class SORT extends RedisCommand
             }
         }
 
-        if (isset($sortParams['LIMIT'])
-            && is_array($sortParams['LIMIT'])
-            && count($sortParams['LIMIT']) == 2) {
+        if (isset($sortParams['LIMIT']) &&
+            is_array($sortParams['LIMIT']) &&
+            count($sortParams['LIMIT']) == 2) {
             $query[] = 'LIMIT';
             $query[] = $sortParams['LIMIT'][0];
             $query[] = $sortParams['LIMIT'][1];
@@ -82,36 +83,5 @@ class SORT extends RedisCommand
         }
 
         parent::setArguments($query);
-    }
-
-    public function prefixKeys($prefix)
-    {
-        if ($arguments = $this->getArguments()) {
-            $arguments[0] = "$prefix{$arguments[0]}";
-
-            if (($count = count($arguments)) > 1) {
-                for ($i = 1; $i < $count; ++$i) {
-                    switch (strtoupper($arguments[$i])) {
-                        case 'BY':
-                        case 'STORE':
-                            $arguments[$i] = "$prefix{$arguments[++$i]}";
-                            break;
-
-                        case 'GET':
-                            $value = $arguments[++$i];
-                            if ($value !== '#') {
-                                $arguments[$i] = "$prefix$value";
-                            }
-                            break;
-
-                        case 'LIMIT':
-                            $i += 2;
-                            break;
-                    }
-                }
-            }
-
-            $this->setRawArguments($arguments);
-        }
     }
 }

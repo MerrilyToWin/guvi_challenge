@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,7 +11,6 @@
 
 namespace Predis\Command;
 
-use InvalidArgumentException;
 use Predis\ClientException;
 use Predis\Command\Processor\ProcessorInterface;
 
@@ -22,6 +20,8 @@ use Predis\Command\Processor\ProcessorInterface;
  * This class provides all of the common functionalities required for a command
  * factory to create new instances of Redis commands objects. It also allows to
  * define or undefine command handler classes for each command ID.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 abstract class Factory implements FactoryInterface
 {
@@ -49,11 +49,13 @@ abstract class Factory implements FactoryInterface
      *
      * @param string $commandID Command ID
      *
-     * @return string|null
+     * @return ?string
      */
     public function getCommandClass(string $commandID): ?string
     {
-        return $this->commands[strtoupper($commandID)] ?? null;
+        if (isset($this->commands[$commandID = strtoupper($commandID)])) {
+            return $this->commands[$commandID];
+        }
     }
 
     /**
@@ -87,12 +89,12 @@ abstract class Factory implements FactoryInterface
      * @param string $commandID    Command ID
      * @param string $commandClass FQCN of a class implementing Predis\Command\CommandInterface
      *
-     * @throws InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function define(string $commandID, string $commandClass): void
     {
         if (!is_a($commandClass, 'Predis\Command\CommandInterface', true)) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 "Class $commandClass must implement Predis\Command\CommandInterface"
             );
         }
@@ -134,7 +136,7 @@ abstract class Factory implements FactoryInterface
     /**
      * Returns the current command processor.
      *
-     * @return ProcessorInterface|null
+     * @return ?ProcessorInterface
      */
     public function getProcessor(): ?ProcessorInterface
     {

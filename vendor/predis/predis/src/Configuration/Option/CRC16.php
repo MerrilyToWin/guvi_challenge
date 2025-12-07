@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,13 +11,14 @@
 
 namespace Predis\Configuration\Option;
 
-use InvalidArgumentException;
 use Predis\Cluster\Hash;
 use Predis\Configuration\OptionInterface;
 use Predis\Configuration\OptionsInterface;
 
 /**
  * Configures an hash generator used by the redis-cluster connection backend.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class CRC16 implements OptionInterface
 {
@@ -26,7 +26,7 @@ class CRC16 implements OptionInterface
      * Returns an hash generator instance from a descriptive name.
      *
      * @param OptionsInterface $options     Client options.
-     * @param string           $description Identifier of a hash generator (`predis`)
+     * @param string           $description Identifier of a hash generator (`predis`, `phpiredis`)
      *
      * @return callable
      */
@@ -34,9 +34,11 @@ class CRC16 implements OptionInterface
     {
         if ($description === 'predis') {
             return new Hash\CRC16();
+        } elseif ($description === 'phpiredis') {
+            return new Hash\PhpiredisCRC16();
         } else {
-            throw new InvalidArgumentException(
-                'String value for the crc16 option must be either `predis`'
+            throw new \InvalidArgumentException(
+                'String value for the crc16 option must be either `predis` or `phpiredis`'
             );
         }
     }
@@ -56,7 +58,7 @@ class CRC16 implements OptionInterface
             return $value;
         } else {
             $class = get_class($this);
-            throw new InvalidArgumentException("$class expects a valid hash generator");
+            throw new \InvalidArgumentException("$class expects a valid hash generator");
         }
     }
 
@@ -65,6 +67,8 @@ class CRC16 implements OptionInterface
      */
     public function getDefault(OptionsInterface $options)
     {
-        return new Hash\CRC16();
+        return function_exists('phpiredis_utils_crc16')
+            ? new Hash\PhpiredisCRC16()
+            : new Hash\CRC16();
     }
 }

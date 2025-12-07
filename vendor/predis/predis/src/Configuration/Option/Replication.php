@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -21,6 +20,8 @@ use Predis\Connection\Replication\SentinelReplication;
 /**
  * Configures an aggregate connection used for master/slave replication among
  * multiple Redis nodes.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Replication extends Aggregate
 {
@@ -68,12 +69,12 @@ class Replication extends Aggregate
         switch ($description) {
             case 'sentinel':
             case 'redis-sentinel':
-                return function ($parameters, $options) {
+                return function ($parameters, $options, $option) {
                     return new SentinelReplication($options->service, $parameters, $options->connections);
                 };
 
             case 'predis':
-                return $this->getDefaultConnectionInitializer();
+                return $this->getDefaultConnectionInitializer($options);
 
             default:
                 throw new InvalidArgumentException(sprintf(
@@ -91,7 +92,7 @@ class Replication extends Aggregate
      */
     protected function getDefaultConnectionInitializer()
     {
-        return function ($parameters, $options) {
+        return function ($parameters, $options, $option) {
             $connection = new MasterSlaveReplication();
 
             if ($options->autodiscovery) {
@@ -108,6 +109,14 @@ class Replication extends Aggregate
      */
     public static function aggregate(OptionsInterface $options, AggregateConnectionInterface $connection, array $nodes)
     {
+        // TODO: at least for now we will replicate the previous behaviour of
+        // skipping automatic aggregation when using the redis-sentinel backend
+        // because $nodes contains an array of sentinel servers instead of Redis
+        // servers and SentinelReplication already gets the list of sentinels in
+        // the first argument of its constructor. SentinelReplication::add()
+        // actually knows how to handle connections marked with role=sentinel in
+        // their parameters but relying on it would require an explicit role to
+        // be set by the user and I would like to avoid enforcing that for now.
         if (!$connection instanceof SentinelReplication) {
             parent::aggregate($options, $connection, $nodes);
         }

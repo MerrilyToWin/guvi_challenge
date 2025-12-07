@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -15,6 +14,8 @@ namespace Predis\Response;
 /**
  * Represents an error returned by Redis (-ERR responses) during the execution
  * of a command on the server.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Error implements ErrorInterface
 {
@@ -41,7 +42,7 @@ class Error implements ErrorInterface
      */
     public function getErrorType()
     {
-        [$errorType] = explode(' ', $this->getMessage(), 2);
+        list($errorType) = explode(' ', $this->getMessage(), 2);
 
         return $errorType;
     }

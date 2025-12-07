@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -15,7 +14,9 @@ namespace Predis\Command\Redis;
 use Predis\Command\Command as RedisCommand;
 
 /**
- * @see http://redis.io/commands/info
+ * @link http://redis.io/commands/info
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class INFO extends RedisCommand
 {
@@ -33,7 +34,7 @@ class INFO extends RedisCommand
     public function parseResponse($data)
     {
         if (empty($data) || !$lines = preg_split('/\r?\n/', $data)) {
-            return [];
+            return array();
         }
 
         if (strpos($lines[0], '#') === 0) {
@@ -48,7 +49,7 @@ class INFO extends RedisCommand
      */
     public function parseNewResponseFormat($lines)
     {
-        $info = [];
+        $info = array();
         $current = null;
 
         foreach ($lines as $row) {
@@ -57,12 +58,12 @@ class INFO extends RedisCommand
             }
 
             if (preg_match('/^# (\w+)$/', $row, $matches)) {
-                $info[$matches[1]] = [];
+                $info[$matches[1]] = array();
                 $current = &$info[$matches[1]];
                 continue;
             }
 
-            [$k, $v] = $this->parseRow($row);
+            list($k, $v) = $this->parseRow($row);
             $current[$k] = $v;
         }
 
@@ -74,14 +75,14 @@ class INFO extends RedisCommand
      */
     public function parseOldResponseFormat($lines)
     {
-        $info = [];
+        $info = array();
 
         foreach ($lines as $row) {
             if (strpos($row, ':') === false) {
                 continue;
             }
 
-            [$k, $v] = $this->parseRow($row);
+            list($k, $v) = $this->parseRow($row);
             $info[$k] = $v;
         }
 
@@ -97,17 +98,13 @@ class INFO extends RedisCommand
      */
     protected function parseRow($row)
     {
-        if (preg_match('/^module:name/', $row)) {
-            return $this->parseModuleRow($row);
-        }
-
-        [$k, $v] = explode(':', $row, 2);
+        list($k, $v) = explode(':', $row, 2);
 
         if (preg_match('/^db\d+$/', $k)) {
             $v = $this->parseDatabaseStats($v);
         }
 
-        return [$k, $v];
+        return array($k, $v);
     }
 
     /**
@@ -119,48 +116,13 @@ class INFO extends RedisCommand
      */
     protected function parseDatabaseStats($str)
     {
-        $db = [];
+        $db = array();
 
         foreach (explode(',', $str) as $dbvar) {
-            [$dbvk, $dbvv] = explode('=', $dbvar);
+            list($dbvk, $dbvv) = explode('=', $dbvar);
             $db[trim($dbvk)] = $dbvv;
         }
 
         return $db;
-    }
-
-    /**
-     * Parsing module rows because of different format.
-     *
-     * @param  string $row
-     * @return array
-     */
-    protected function parseModuleRow(string $row): array
-    {
-        [$moduleKeyword, $moduleData] = explode(':', $row);
-        $explodedData = explode(',', $moduleData);
-        $parsedData = [];
-
-        foreach ($explodedData as $moduleDataRow) {
-            [$k, $v] = explode('=', $moduleDataRow);
-
-            if ($k === 'name') {
-                $parsedData[0] = $v;
-                continue;
-            }
-
-            $parsedData[1][$k] = $v;
-        }
-
-        return $parsedData;
-    }
-
-    /**
-     * @param                          $data
-     * @return array|mixed|string|null
-     */
-    public function parseResp3Response($data)
-    {
-        return $this->parseResponse($data);
     }
 }

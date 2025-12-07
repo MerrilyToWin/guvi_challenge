@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -20,6 +19,8 @@ use Predis\Command\CommandInterface;
  * keys extracted from supported commands.
  *
  * This is mostly useful to support clustering via client-side sharding.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 interface StrategyInterface
 {
@@ -29,7 +30,7 @@ interface StrategyInterface
      *
      * @param CommandInterface $command Command instance.
      *
-     * @return int|null
+     * @return int
      */
     public function getSlot(CommandInterface $command);
 
@@ -39,7 +40,7 @@ interface StrategyInterface
      *
      * @param string $key Key string.
      *
-     * @return int|null
+     * @return int
      */
     public function getSlotByKey($key);
 
@@ -49,12 +50,4 @@ interface StrategyInterface
      * @return DistributorInterface
      */
     public function getDistributor();
-
-    /**
-     * Checks if the specified array of keys will generate the same hash.
-     *
-     * @param  array $keys
-     * @return bool
-     */
-    public function checkSameSlotForKeys(array $keys): bool;
 }

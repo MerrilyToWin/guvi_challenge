@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,19 +11,16 @@
 
 namespace Predis\Response\Iterator;
 
-use InvalidArgumentException;
-use OuterIterator;
-use ReturnTypeWillChange;
-use UnexpectedValueException;
-
 /**
  * Outer iterator consuming streamable multibulk responses by yielding tuples of
  * keys and values.
  *
  * This wrapper is useful for responses to commands such as `HGETALL` that can
- * be iterator as $key => $value pairs.
+ * be iterater as $key => $value pairs.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-class MultiBulkTuple extends MultiBulk implements OuterIterator
+class MultiBulkTuple extends MultiBulk implements \OuterIterator
 {
     private $iterator;
 
@@ -46,26 +42,26 @@ class MultiBulkTuple extends MultiBulk implements OuterIterator
      *
      * @param MultiBulk $iterator Inner multibulk response iterator.
      *
-     * @throws InvalidArgumentException
-     * @throws UnexpectedValueException
+     * @throws \InvalidArgumentException
+     * @throws \UnexpectedValueException
      */
     protected function checkPreconditions(MultiBulk $iterator)
     {
         if ($iterator->getPosition() !== 0) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 'Cannot initialize a tuple iterator using an already initiated iterator.'
             );
         }
 
         if (($size = count($iterator)) % 2 !== 0) {
-            throw new UnexpectedValueException('Invalid response size for a tuple iterator.');
+            throw new \UnexpectedValueException('Invalid response size for a tuple iterator.');
         }
     }
 
     /**
-     * @return MultiBulk
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function getInnerIterator()
     {
         return $this->iterator;
@@ -90,6 +86,6 @@ class MultiBulkTuple extends MultiBulk implements OuterIterator
         $v = $this->iterator->current();
         $this->iterator->next();
 
-        return [$k, $v];
+        return array($k, $v);
     }
 }

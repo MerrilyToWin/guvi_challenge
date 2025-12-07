@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,13 +11,12 @@
 
 namespace Predis\Configuration\Option;
 
-use InvalidArgumentException;
 use Predis\Configuration\OptionInterface;
 use Predis\Configuration\OptionsInterface;
 use Predis\Connection\Factory;
 use Predis\Connection\FactoryInterface;
-use Predis\Connection\RelayConnection;
-use Predis\Connection\RelayFactory;
+use Predis\Connection\PhpiredisStreamConnection;
+use Predis\Connection\PhpiredisSocketConnection;
 
 /**
  * Configures a new connection factory instance.
@@ -26,6 +24,8 @@ use Predis\Connection\RelayFactory;
  * The client uses the connection factory to create the underlying connections
  * to single redis nodes in a single-server configuration or in replication and
  * cluster configurations.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Connections implements OptionInterface
 {
@@ -45,7 +45,7 @@ class Connections implements OptionInterface
         } elseif (is_string($value)) {
             return $this->createFactoryByString($options, $value);
         } else {
-            throw new InvalidArgumentException(sprintf(
+            throw new \InvalidArgumentException(sprintf(
                 '%s expects a valid connection factory', static::class
             ));
         }
@@ -57,7 +57,7 @@ class Connections implements OptionInterface
      * The factory instance is configured according to the supplied named array
      * mapping URI schemes (passed as keys) to the FCQN of classes implementing
      * Predis\Connection\NodeConnectionInterface, or callable objects acting as
-     * lazy initializers and returning new instances of classes implementing
+     * lazy initalizers and returning new instances of classes implementing
      * Predis\Connection\NodeConnectionInterface.
      *
      * @param OptionsInterface $options Client options
@@ -86,7 +86,9 @@ class Connections implements OptionInterface
      * string that identifies specific configurations of schemes and connection
      * classes. Supported configuration values are:
      *
-     * - "relay" maps tcp, redis, unix, tls, rediss to RelayConnection
+     * - "phpiredis-stream" maps tcp, redis, unix to PhpiredisStreamConnection
+     * - "phpiredis-socket" maps tcp, redis, unix to PhpiredisSocketConnection
+     * - "phpiredis" is an alias of "phpiredis-stream"
      *
      * @param OptionsInterface $options Client options
      * @param string           $value   Descriptive string identifying the desired configuration
@@ -95,18 +97,35 @@ class Connections implements OptionInterface
      */
     protected function createFactoryByString(OptionsInterface $options, string $value)
     {
-        switch (strtolower($value)) {
-            case 'relay':
-                return $this->getRelayFactory($options);
+        /**
+         * @var FactoryInterface
+         */
+        $factory = $this->getDefault($options);
+
+        switch(strtolower($value)) {
+            case 'phpiredis':
+            case 'phpiredis-stream':
+                $factory->define('tcp', PhpiredisStreamConnection::class);
+                $factory->define('redis', PhpiredisStreamConnection::class);
+                $factory->define('unix', PhpiredisStreamConnection::class);
+                break;
+
+            case 'phpiredis-socket':
+                $factory->define('tcp', PhpiredisSocketConnection::class);
+                $factory->define('redis', PhpiredisSocketConnection::class);
+                $factory->define('unix', PhpiredisSocketConnection::class);
+                break;
 
             case 'default':
-                return $this->getDefault($options);
+                return $factory;
 
             default:
-                throw new InvalidArgumentException(sprintf(
+                throw new \InvalidArgumentException(sprintf(
                     '%s does not recognize `%s` as a supported configuration string', static::class, $value
                 ));
         }
+
+        return $factory;
     }
 
     /**
@@ -115,23 +134,6 @@ class Connections implements OptionInterface
     public function getDefault(OptionsInterface $options)
     {
         $factory = new Factory();
-
-        if ($options->defined('parameters')) {
-            $factory->setDefaultParameters($options->parameters);
-        }
-
-        return $factory;
-    }
-
-    /**
-     * Creates RelayFactory instance.
-     *
-     * @param  OptionsInterface $options
-     * @return FactoryInterface
-     */
-    private function getRelayFactory(OptionsInterface $options): FactoryInterface
-    {
-        $factory = new RelayFactory();
 
         if ($options->defined('parameters')) {
             $factory->setDefaultParameters($options->parameters);

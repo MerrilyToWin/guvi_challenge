@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,10 +11,12 @@
 
 namespace Predis\Command\Redis;
 
-use Predis\Command\PrefixableCommand as RedisCommand;
+use Predis\Command\Command as RedisCommand;
 
 /**
- * @see http://redis.io/commands/zrange
+ * @link http://redis.io/commands/zrange
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class ZRANGE extends RedisCommand
 {
@@ -37,7 +38,7 @@ class ZRANGE extends RedisCommand
 
             if ($lastType === 'string' && strtoupper($arguments[3]) === 'WITHSCORES') {
                 // Used for compatibility with older versions
-                $arguments[3] = ['WITHSCORES' => true];
+                $arguments[3] = array('WITHSCORES' => true);
                 $lastType = 'array';
             }
 
@@ -60,7 +61,7 @@ class ZRANGE extends RedisCommand
     protected function prepareOptions($options)
     {
         $opts = array_change_key_case($options, CASE_UPPER);
-        $finalizedOpts = [];
+        $finalizedOpts = array();
 
         if (!empty($opts['WITHSCORES'])) {
             $finalizedOpts[] = 'WITHSCORES';
@@ -91,43 +92,15 @@ class ZRANGE extends RedisCommand
     public function parseResponse($data)
     {
         if ($this->withScores()) {
-            $result = [];
+            $result = array();
 
             for ($i = 0; $i < count($data); ++$i) {
-                if (is_array($data[$i])) {
-                    $result[$data[$i][0]] = $data[$i][1]; // Relay
-                } else {
-                    $result[$data[$i]] = $data[++$i];
-                }
+                $result[$data[$i]] = $data[++$i];
             }
 
             return $result;
         }
 
         return $data;
-    }
-
-    /**
-     * @param                          $data
-     * @return array|mixed|string|null
-     */
-    public function parseResp3Response($data)
-    {
-        if (!is_array($data)) {
-            return $data;
-        }
-
-        $parsedData = [];
-
-        foreach ($data as $element) {
-            $parsedData[] = $this->parseResponse($element);
-        }
-
-        return $parsedData;
-    }
-
-    public function prefixKeys($prefix)
-    {
-        $this->applyPrefixForFirstArgument($prefix);
     }
 }

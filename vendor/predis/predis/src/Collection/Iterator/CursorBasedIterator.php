@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,10 +11,8 @@
 
 namespace Predis\Collection\Iterator;
 
-use Iterator;
 use Predis\ClientInterface;
 use Predis\NotSupportedException;
-use ReturnTypeWillChange;
 
 /**
  * Provides the base implementation for a fully-rewindable PHP iterator that can
@@ -27,8 +24,10 @@ use ReturnTypeWillChange;
  * can change several times during the iteration process.
  *
  * @see http://redis.io/commands/scan
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-abstract class CursorBasedIterator implements Iterator
+abstract class CursorBasedIterator implements \Iterator
 {
     protected $client;
     protected $match;
@@ -78,7 +77,7 @@ abstract class CursorBasedIterator implements Iterator
     {
         $this->valid = true;
         $this->fetchmore = true;
-        $this->elements = [];
+        $this->elements = array();
         $this->cursor = 0;
         $this->position = -1;
         $this->current = null;
@@ -91,7 +90,7 @@ abstract class CursorBasedIterator implements Iterator
      */
     protected function getScanOptions()
     {
-        $options = [];
+        $options = array();
 
         if (strlen(strval($this->match)) > 0) {
             $options['MATCH'] = $this->match;
@@ -118,7 +117,7 @@ abstract class CursorBasedIterator implements Iterator
      */
     protected function fetch()
     {
-        [$cursor, $elements] = $this->executeCommand();
+        list($cursor, $elements) = $this->executeCommand();
 
         if (!$cursor) {
             $this->fetchmore = false;
@@ -138,9 +137,9 @@ abstract class CursorBasedIterator implements Iterator
     }
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function rewind()
     {
         $this->reset();
@@ -148,47 +147,48 @@ abstract class CursorBasedIterator implements Iterator
     }
 
     /**
-     * @return mixed
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->current;
     }
 
     /**
-     * @return int|null
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->position;
     }
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function next()
     {
-        tryFetch:
+        tryFetch: {
             if (!$this->elements && $this->fetchmore) {
                 $this->fetch();
             }
 
-        if ($this->elements) {
-            $this->extractNext();
-        } elseif ($this->cursor) {
-            goto tryFetch;
-        } else {
-            $this->valid = false;
+            if ($this->elements) {
+                $this->extractNext();
+            } elseif ($this->cursor) {
+                goto tryFetch;
+            } else {
+                $this->valid = false;
+            }
         }
     }
 
     /**
-     * @return bool
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function valid()
     {
         return $this->valid;

@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -14,16 +13,16 @@ namespace Predis\Pipeline;
 
 use Predis\ClientException;
 use Predis\ClientInterface;
-use Predis\Connection\AggregateConnectionInterface;
 use Predis\Connection\ConnectionInterface;
 use Predis\Connection\NodeConnectionInterface;
 use Predis\Response\ErrorInterface as ErrorResponseInterface;
 use Predis\Response\ResponseInterface;
 use Predis\Response\ServerException;
-use SplQueue;
 
 /**
  * Command pipeline wrapped into a MULTI / EXEC transaction.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Atomic extends Pipeline
 {
@@ -60,15 +59,13 @@ class Atomic extends Pipeline
     /**
      * {@inheritdoc}
      */
-    protected function executePipeline(ConnectionInterface $connection, SplQueue $commands)
+    protected function executePipeline(ConnectionInterface $connection, \SplQueue $commands)
     {
         $commandFactory = $this->getClient()->getCommandFactory();
         $connection->executeCommand($commandFactory->create('multi'));
 
-        if ($connection instanceof AggregateConnectionInterface) {
-            $this->writeToMultiNode($connection, $commands);
-        } else {
-            $this->writeToSingleNode($connection, $commands);
+        foreach ($commands as $command) {
+            $connection->writeRequest($command);
         }
 
         foreach ($commands as $command) {
@@ -83,6 +80,7 @@ class Atomic extends Pipeline
         $executed = $connection->executeCommand($commandFactory->create('exec'));
 
         if (!isset($executed)) {
+            // TODO: should be throwing a more appropriate exception.
             throw new ClientException(
                 'The underlying transaction has been aborted by the server.'
             );
@@ -97,21 +95,16 @@ class Atomic extends Pipeline
             );
         }
 
-        $responses = [];
+        $responses = array();
         $sizeOfPipe = count($commands);
         $exceptions = $this->throwServerExceptions();
-        $protocolVersion = (int) $connection->getParameters()->protocol;
 
         for ($i = 0; $i < $sizeOfPipe; ++$i) {
             $command = $commands->dequeue();
             $response = $executed[$i];
 
             if (!$response instanceof ResponseInterface) {
-                if ($protocolVersion === 2) {
-                    $responses[] = $command->parseResponse($response);
-                } else {
-                    $responses[] = $command->parseResp3Response($response);
-                }
+                $responses[] = $command->parseResponse($response);
             } elseif ($response instanceof ErrorResponseInterface && $exceptions) {
                 $this->exception($connection, $response);
             } else {

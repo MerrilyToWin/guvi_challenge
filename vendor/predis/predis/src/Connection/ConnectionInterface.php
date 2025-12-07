@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -17,6 +16,8 @@ use Predis\Command\CommandInterface;
 /**
  * Defines a connection object used to communicate with one or multiple
  * Redis servers.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 interface ConnectionInterface
 {
@@ -54,15 +55,6 @@ interface ConnectionInterface
     public function readResponse(CommandInterface $command);
 
     /**
-     * Performs a write operation over the stream of the buffer containing a
-     * command serialized with the Redis wire protocol.
-     *
-     * @param  string $buffer
-     * @return void
-     */
-    public function write(string $buffer): void;
-
-    /**
      * Writes a request for the given command over the connection and reads back
      * the response returned by Redis.
      *
@@ -71,11 +63,4 @@ interface ConnectionInterface
      * @return mixed
      */
     public function executeCommand(CommandInterface $command);
-
-    /**
-     * Returns the parameters used to initialize the connection.
-     *
-     * @return ParametersInterface
-     */
-    public function getParameters();
 }

@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,30 +11,15 @@
 
 namespace Predis\Command\Redis;
 
-use Predis\Command\PrefixableCommand as RedisCommand;
-use Predis\Command\Traits\Aggregate;
-use Predis\Command\Traits\Keys;
-use Predis\Command\Traits\Weights;
+use Predis\Command\Command as RedisCommand;
 
 /**
- * @see http://redis.io/commands/zunionstore
+ * @link http://redis.io/commands/zunionstore
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class ZUNIONSTORE extends RedisCommand
 {
-    use Keys {
-        Keys::setArguments as setKeys;
-    }
-    use Weights {
-        Weights::setArguments as setWeights;
-    }
-    use Aggregate{
-        Aggregate::setArguments as setAggregate;
-    }
-
-    protected static $keysArgumentPositionOffset = 1;
-    protected static $weightsArgumentPositionOffset = 2;
-    protected static $aggregateArgumentPositionOffset = 3;
-
     /**
      * {@inheritdoc}
      */
@@ -49,33 +33,48 @@ class ZUNIONSTORE extends RedisCommand
      */
     public function setArguments(array $arguments)
     {
-        // support old `$options` array for backwards compatibility
-        if (!isset($arguments[3]) && (isset($arguments[2]['weights']) || isset($arguments[2]['aggregate']))) {
-            $options = array_pop($arguments);
-            array_push($arguments, $options['weights'] ?? []);
-            array_push($arguments, $options['aggregate'] ?? 'sum');
+        $options = array();
+        $argc = count($arguments);
+
+        if ($argc > 2 && is_array($arguments[$argc - 1])) {
+            $options = $this->prepareOptions(array_pop($arguments));
         }
 
-        $this->setAggregate($arguments);
-        $arguments = $this->getArguments();
+        if (is_array($arguments[1])) {
+            $arguments = array_merge(
+                array($arguments[0], count($arguments[1])),
+                $arguments[1]
+            );
+        }
 
-        $this->setWeights($arguments);
-        $arguments = $this->getArguments();
-
-        $this->setKeys($arguments);
+        parent::setArguments(array_merge($arguments, $options));
     }
 
-    public function prefixKeys($prefix)
+    /**
+     * Returns a list of options and modifiers compatible with Redis.
+     *
+     * @param array $options List of options.
+     *
+     * @return array
+     */
+    private function prepareOptions($options)
     {
-        if ($arguments = $this->getArguments()) {
-            $arguments[0] = "$prefix{$arguments[0]}";
-            $length = ((int) $arguments[1]) + 2;
+        $opts = array_change_key_case($options, CASE_UPPER);
+        $finalizedOpts = array();
 
-            for ($i = 2; $i < $length; ++$i) {
-                $arguments[$i] = "$prefix{$arguments[$i]}";
+        if (isset($opts['WEIGHTS']) && is_array($opts['WEIGHTS'])) {
+            $finalizedOpts[] = 'WEIGHTS';
+
+            foreach ($opts['WEIGHTS'] as $weight) {
+                $finalizedOpts[] = $weight;
             }
-
-            $this->setRawArguments($arguments);
         }
+
+        if (isset($opts['AGGREGATE'])) {
+            $finalizedOpts[] = 'AGGREGATE';
+            $finalizedOpts[] = $opts['AGGREGATE'];
+        }
+
+        return $finalizedOpts;
     }
 }

@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,10 +11,7 @@
 
 namespace Predis\Response\Iterator;
 
-use Countable;
-use Iterator;
 use Predis\Response\ResponseInterface;
-use ReturnTypeWillChange;
 
 /**
  * Iterator that abstracts the access to multibulk responses allowing them to be
@@ -26,44 +22,46 @@ use ReturnTypeWillChange;
  *
  * Always make sure that the whole iteration is consumed (or dropped) to prevent
  * protocol desynchronization issues.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-abstract class MultiBulkIterator implements Iterator, Countable, ResponseInterface
+abstract class MultiBulkIterator implements \Iterator, \Countable, ResponseInterface
 {
     protected $current;
     protected $position;
     protected $size;
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function rewind()
     {
         // NOOP
     }
 
     /**
-     * @return mixed
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->current;
     }
 
     /**
-     * @return int|null
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->position;
     }
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function next()
     {
         if (++$this->position < $this->size) {
@@ -72,9 +70,9 @@ abstract class MultiBulkIterator implements Iterator, Countable, ResponseInterfa
     }
 
     /**
-     * @return bool
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function valid()
     {
         return $this->position < $this->size;
@@ -89,7 +87,7 @@ abstract class MultiBulkIterator implements Iterator, Countable, ResponseInterfa
      *
      * @return int
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function count()
     {
         return $this->size;

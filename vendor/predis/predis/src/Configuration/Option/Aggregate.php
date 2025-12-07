@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -26,6 +25,8 @@ use Predis\Connection\NodeConnectionInterface;
  * invoked by the client to create a new aggregate connection instance.
  *
  * Creation and configuration of the aggregate connection is up to the user.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Aggregate implements OptionInterface
 {
@@ -63,8 +64,9 @@ class Aggregate implements OptionInterface
      * @param OptionsInterface $options  Client options
      * @param callable         $callable Callable initializer
      *
-     * @return callable
      * @throws InvalidArgumentException
+     *
+     * @return callable
      */
     protected function getConnectionInitializer(OptionsInterface $options, callable $callable)
     {

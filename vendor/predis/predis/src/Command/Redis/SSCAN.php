@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,10 +11,12 @@
 
 namespace Predis\Command\Redis;
 
-use Predis\Command\PrefixableCommand as RedisCommand;
+use Predis\Command\Command as RedisCommand;
 
 /**
- * @see http://redis.io/commands/sscan
+ * @link http://redis.io/commands/sscan
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class SSCAN extends RedisCommand
 {
@@ -50,7 +51,7 @@ class SSCAN extends RedisCommand
     protected function prepareOptions($options)
     {
         $options = array_change_key_case($options, CASE_UPPER);
-        $normalized = [];
+        $normalized = array();
 
         if (!empty($options['MATCH'])) {
             $normalized[] = 'MATCH';
@@ -63,10 +64,5 @@ class SSCAN extends RedisCommand
         }
 
         return $normalized;
-    }
-
-    public function prefixKeys($prefix)
-    {
-        $this->applyPrefixForFirstArgument($prefix);
     }
 }

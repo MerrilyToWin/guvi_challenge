@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,28 +11,24 @@
 
 namespace Predis\Connection\Replication;
 
-use InvalidArgumentException;
-use Predis\Command\Command;
 use Predis\Command\CommandInterface;
 use Predis\Command\RawCommand;
-use Predis\Connection\AbstractAggregateConnection;
+use Predis\CommunicationException;
 use Predis\Connection\ConnectionException;
 use Predis\Connection\FactoryInterface as ConnectionFactoryInterface;
 use Predis\Connection\NodeConnectionInterface;
 use Predis\Connection\Parameters;
-use Predis\Connection\ParametersInterface;
 use Predis\Replication\ReplicationStrategy;
 use Predis\Replication\RoleException;
 use Predis\Response\Error;
 use Predis\Response\ErrorInterface as ErrorResponseInterface;
 use Predis\Response\ServerException;
-use Throwable;
 
 /**
  * @author Daniele Alessandri <suppakilla@gmail.com>
  * @author Ville Mattila <ville@eventio.fi>
  */
-class SentinelReplication extends AbstractAggregateConnection implements ReplicationInterface
+class SentinelReplication implements ReplicationInterface
 {
     /**
      * @var NodeConnectionInterface
@@ -43,12 +38,12 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $slaves = [];
+    protected $slaves = array();
 
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $pool = [];
+    protected $pool = array();
 
     /**
      * @var NodeConnectionInterface
@@ -73,12 +68,7 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     /**
      * @var NodeConnectionInterface[]
      */
-    protected $sentinels = [];
-
-    /**
-     * @var int
-     */
-    protected $sentinelIndex = 0;
+    protected $sentinels = array();
 
     /**
      * @var NodeConnectionInterface
@@ -94,7 +84,7 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      * Max number of automatic retries of commands upon server failure.
      *
      * -1 = unlimited retry attempts
-     *  0 = no retry attempts (fails immediately)
+     *  0 = no retry attempts (fails immediatly)
      *  n = fail only after n retry attempts
      *
      * @var int
@@ -120,13 +110,13 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      * @param string                     $service           Name of the service for autodiscovery.
      * @param array                      $sentinels         Sentinel servers connection parameters.
      * @param ConnectionFactoryInterface $connectionFactory Connection factory instance.
-     * @param ReplicationStrategy|null   $strategy          Replication strategy instance.
+     * @param ReplicationStrategy        $strategy          Replication strategy instance.
      */
     public function __construct(
         $service,
         array $sentinels,
         ConnectionFactoryInterface $connectionFactory,
-        ?ReplicationStrategy $strategy = null
+        ReplicationStrategy $strategy = null
     ) {
         $this->sentinels = $sentinels;
         $this->service = $service;
@@ -151,7 +141,7 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      * Sets the maximum number of retries for commands upon server failure.
      *
      * -1 = unlimited retry attempts
-     *  0 = no retry attempts (fails immediately)
+     *  0 = no retry attempts (fails immediatly)
      *  n = fail only after n retry attempts
      *
      * @param int $retry Number of retry attempts.
@@ -198,8 +188,8 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
         $this->reset();
 
         $this->master = null;
-        $this->slaves = [];
-        $this->pool = [];
+        $this->slaves = array();
+        $this->pool = array();
     }
 
     /**
@@ -208,13 +198,11 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     public function add(NodeConnectionInterface $connection)
     {
         $parameters = $connection->getParameters();
-        $role = $parameters->role;
 
-        if ('master' === $role) {
+        if ('master' === $role = $parameters->role) {
             $this->master = $connection;
         } elseif ('sentinel' === $role) {
             $this->sentinels[] = $connection;
-
             // sentinels are not considered part of the pool.
             return;
         } else {
@@ -267,16 +255,14 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
         }
 
         if (is_array($parameters)) {
-            // NOTE: sentinels do not accept SELECT command so we must
-            // explicitly set it to NULL to avoid problems when using default
-            // parameters set via client options.
+            // NOTE: sentinels do not accept AUTH and SELECT commands so we must
+            // explicitly set them to NULL to avoid problems when using default
+            // parameters set via client options. Actually AUTH is supported for
+            // sentinels starting with Redis 5 but we have to differentiate from
+            // sentinels passwords and nodes passwords, this will be implemented
+            // in a later release.
             $parameters['database'] = null;
-
-            // don't leak password from between configurations
-            // https://github.com/predis/predis/pull/807/#discussion_r985764770
-            if (!isset($parameters['password'])) {
-                $parameters['password'] = null;
-            }
+            $parameters['username'] = null;
 
             if (!isset($parameters['timeout'])) {
                 $parameters['timeout'] = $this->sentinelTimeout;
@@ -296,13 +282,11 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     public function getSentinelConnection()
     {
         if (!$this->sentinelConnection) {
-            if ($this->sentinelIndex >= count($this->sentinels)) {
-                $this->sentinelIndex = 0;
+            if (!$this->sentinels) {
                 throw new \Predis\ClientException('No sentinel server available for autodiscovery.');
             }
 
-            $sentinel = $this->sentinels[$this->sentinelIndex];
-            ++$this->sentinelIndex;
+            $sentinel = array_shift($this->sentinels);
             $this->sentinelConnection = $this->createSentinelConnection($sentinel);
         }
 
@@ -322,17 +306,16 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
                     RawCommand::create('SENTINEL', 'sentinels', $this->service)
                 );
 
-                $this->sentinels = [];
-                $this->sentinelIndex = 0;
+                $this->sentinels = array();
                 // NOTE: sentinel server does not return itself, so we add it back.
                 $this->sentinels[] = $sentinel->getParameters()->toArray();
 
                 foreach ($payload as $sentinel) {
-                    $this->sentinels[] = [
+                    $this->sentinels[] = array(
                         'host' => $sentinel[3],
                         'port' => $sentinel[5],
                         'role' => 'sentinel',
-                    ];
+                    );
                 }
             } catch (ConnectionException $exception) {
                 $this->sentinelConnection = null;
@@ -391,11 +374,11 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
             $this->handleSentinelErrorResponse($sentinel, $payload);
         }
 
-        return [
+        return array(
             'host' => $payload[0],
             'port' => $payload[1],
             'role' => 'master',
-        ];
+        );
     }
 
     /**
@@ -408,7 +391,7 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      */
     protected function querySentinelForSlaves(NodeConnectionInterface $sentinel, $service)
     {
-        $slaves = [];
+        $slaves = array();
 
         $payload = $sentinel->executeCommand(
             RawCommand::create('SENTINEL', 'slaves', $service)
@@ -421,20 +404,15 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
         foreach ($payload as $slave) {
             $flags = explode(',', $slave[9]);
 
-            if (array_intersect($flags, ['s_down', 'o_down', 'disconnected'])) {
+            if (array_intersect($flags, array('s_down', 'o_down', 'disconnected'))) {
                 continue;
             }
 
-            // ensure `master-link-status` is ok
-            if (isset($slave[31]) && $slave[31] === 'err') {
-                continue;
-            }
-
-            $slaves[] = [
+            $slaves[] = array(
                 'host' => $slave[3],
                 'port' => $slave[5],
                 'role' => 'slave',
-            ];
+            );
         }
 
         return $slaves;
@@ -514,15 +492,13 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     /**
      * Returns a random slave.
      *
-     * @return NodeConnectionInterface|null
+     * @return NodeConnectionInterface
      */
     protected function pickSlave()
     {
-        $slaves = $this->getSlaves();
-
-        return $slaves
-            ? $slaves[rand(1, count($slaves)) - 1]
-            : null;
+        if ($slaves = $this->getSlaves()) {
+            return $slaves[rand(1, count($slaves)) - 1];
+        }
     }
 
     /**
@@ -599,7 +575,9 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      */
     public function getConnectionById($id)
     {
-        return $this->pool[$id] ?? null;
+        if (isset($this->pool[$id])) {
+            return $this->pool[$id];
+        }
     }
 
     /**
@@ -617,8 +595,6 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
             return $this->pickSlave();
         } elseif ($role === 'sentinel') {
             return $this->getSentinelConnection();
-        } else {
-            return null;
         }
     }
 
@@ -637,7 +613,7 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
         }
 
         if ($connection !== $this->master && !in_array($connection, $this->slaves, true)) {
-            throw new InvalidArgumentException('Invalid connection or connection not found.');
+            throw new \InvalidArgumentException('Invalid connection or connection not found.');
         }
 
         $connection->connect();
@@ -712,27 +688,21 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
     {
         $retries = 0;
 
-        while ($retries <= $this->retryLimit) {
+        SENTINEL_RETRY: {
             try {
                 $response = $this->getConnectionByCommand($command)->$method($command);
-                if ($response instanceof Error && $response->getErrorType() === 'LOADING') {
-                    throw new ConnectionException($this->current, $response->getMessage());
-                }
-                break;
-            } catch (Throwable $exception) {
+            } catch (CommunicationException $exception) {
                 $this->wipeServerList();
+                $exception->getConnection()->disconnect();
 
-                if ($exception instanceof ConnectionException) {
-                    $exception->getConnection()->disconnect();
-                }
-
-                if ($retries === $this->retryLimit) {
+                if ($retries == $this->retryLimit) {
                     throw $exception;
                 }
 
                 usleep($this->retryWait * 1000);
 
                 ++$retries;
+                goto SENTINEL_RETRY;
             }
         }
 
@@ -778,28 +748,8 @@ class SentinelReplication extends AbstractAggregateConnection implements Replica
      */
     public function __sleep()
     {
-        return [
+        return array(
             'master', 'slaves', 'pool', 'service', 'sentinels', 'connectionFactory', 'strategy',
-        ];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getParameters(): ?ParametersInterface
-    {
-        if (isset($this->master)) {
-            return $this->master->getParameters();
-        }
-
-        if (!empty($this->slaves)) {
-            return $this->slaves[0]->getParameters();
-        }
-
-        if (!empty($this->sentinels)) {
-            return $this->sentinels[0]->getParameters();
-        }
-
-        return null;
+        );
     }
 }

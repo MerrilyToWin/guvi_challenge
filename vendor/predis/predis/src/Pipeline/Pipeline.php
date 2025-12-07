@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,32 +11,30 @@
 
 namespace Predis\Pipeline;
 
-use Exception;
-use InvalidArgumentException;
 use Predis\ClientContextInterface;
 use Predis\ClientException;
 use Predis\ClientInterface;
 use Predis\Command\CommandInterface;
-use Predis\Connection\AggregateConnectionInterface;
 use Predis\Connection\ConnectionInterface;
 use Predis\Connection\Replication\ReplicationInterface;
 use Predis\Response\ErrorInterface as ErrorResponseInterface;
 use Predis\Response\ResponseInterface;
 use Predis\Response\ServerException;
-use SplQueue;
 
 /**
  * Implementation of a command pipeline in which write and read operations of
  * Redis commands are pipelined to alleviate the effects of network round-trips.
  *
  * {@inheritdoc}
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 class Pipeline implements ClientContextInterface
 {
-    protected $client;
+    private $client;
     private $pipeline;
 
-    private $responses = [];
+    private $responses = array();
     private $running = false;
 
     /**
@@ -46,7 +43,7 @@ class Pipeline implements ClientContextInterface
     public function __construct(ClientInterface $client)
     {
         $this->client = $client;
-        $this->pipeline = new SplQueue();
+        $this->pipeline = new \SplQueue();
     }
 
     /**
@@ -126,32 +123,25 @@ class Pipeline implements ClientContextInterface
      * from the current connection.
      *
      * @param ConnectionInterface $connection Current connection instance.
-     * @param SplQueue            $commands   Queued commands.
+     * @param \SplQueue           $commands   Queued commands.
      *
      * @return array
      */
-    protected function executePipeline(ConnectionInterface $connection, SplQueue $commands)
+    protected function executePipeline(ConnectionInterface $connection, \SplQueue $commands)
     {
-        if ($connection instanceof AggregateConnectionInterface) {
-            $this->writeToMultiNode($connection, $commands);
-        } else {
-            $this->writeToSingleNode($connection, $commands);
+        foreach ($commands as $command) {
+            $connection->writeRequest($command);
         }
 
-        $responses = [];
+        $responses = array();
         $exceptions = $this->throwServerExceptions();
-        $protocolVersion = (int) $connection->getParameters()->protocol;
 
         while (!$commands->isEmpty()) {
             $command = $commands->dequeue();
             $response = $connection->readResponse($command);
 
             if (!$response instanceof ResponseInterface) {
-                if ($protocolVersion === 2) {
-                    $responses[] = $command->parseResponse($response);
-                } else {
-                    $responses[] = $command->parseResp3Response($response);
-                }
+                $responses[] = $command->parseResponse($response);
             } elseif ($response instanceof ErrorResponseInterface && $exceptions) {
                 $this->exception($connection, $response);
             } else {
@@ -160,39 +150,6 @@ class Pipeline implements ClientContextInterface
         }
 
         return $responses;
-    }
-
-    /**
-     * Writes pipelined commands to single node connection.
-     *
-     * @param  ConnectionInterface $connection
-     * @param  SplQueue            $commands
-     * @return void
-     */
-    protected function writeToSingleNode(ConnectionInterface $connection, SplQueue $commands)
-    {
-        $buffer = '';
-
-        foreach ($commands as $command) {
-            $buffer .= $command->serializeCommand();
-        }
-
-        $connection->write($buffer);
-    }
-
-    /**
-     * Writes pipelined commands to multi node connection.
-     *
-     * @param  AggregateConnectionInterface $connection
-     * @param  SplQueue                     $commands
-     * @return void
-     */
-    protected function writeToMultiNode(AggregateConnectionInterface $connection, SplQueue $commands)
-    {
-        foreach ($commands as $command) {
-            $nodeConnection = $connection->getConnectionByCommand($command);
-            $nodeConnection->write($command->serializeCommand());
-        }
     }
 
     /**
@@ -208,7 +165,7 @@ class Pipeline implements ClientContextInterface
             $responses = $this->executePipeline($this->getConnection(), $this->pipeline);
             $this->responses = array_merge($this->responses, $responses);
         } else {
-            $this->pipeline = new SplQueue();
+            $this->pipeline = new \SplQueue();
         }
 
         return $this;
@@ -235,14 +192,15 @@ class Pipeline implements ClientContextInterface
      *
      * @param mixed $callable Optional callback for execution.
      *
+     * @throws \Exception
+     * @throws \InvalidArgumentException
+     *
      * @return array
-     * @throws Exception
-     * @throws InvalidArgumentException
      */
     public function execute($callable = null)
     {
         if ($callable && !is_callable($callable)) {
-            throw new InvalidArgumentException('The argument must be a callable object.');
+            throw new \InvalidArgumentException('The argument must be a callable object.');
         }
 
         $exception = null;
@@ -254,7 +212,7 @@ class Pipeline implements ClientContextInterface
             }
 
             $this->flushPipeline();
-        } catch (Exception $exception) {
+        } catch (\Exception $exception) {
             // NOOP
         }
 

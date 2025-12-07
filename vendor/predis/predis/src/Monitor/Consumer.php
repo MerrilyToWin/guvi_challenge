@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,16 +11,16 @@
 
 namespace Predis\Monitor;
 
-use Iterator;
 use Predis\ClientInterface;
 use Predis\Connection\Cluster\ClusterInterface;
 use Predis\NotSupportedException;
-use ReturnTypeWillChange;
 
 /**
  * Redis MONITOR consumer.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-class Consumer implements Iterator
+class Consumer implements \Iterator
 {
     private $client;
     private $valid;
@@ -90,9 +89,9 @@ class Consumer implements Iterator
     }
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function rewind()
     {
         // NOOP
@@ -103,25 +102,25 @@ class Consumer implements Iterator
      *
      * @return object
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->getValue();
     }
 
     /**
-     * @return int|null
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->position;
     }
 
     /**
-     * @return void
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function next()
     {
         ++$this->position;
@@ -132,7 +131,7 @@ class Consumer implements Iterator
      *
      * @return bool
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function valid()
     {
         return $this->valid;
@@ -166,14 +165,14 @@ class Consumer implements Iterator
         };
 
         $event = preg_replace_callback('/ \(db (\d+)\) | \[(\d+) (.*?)\] /', $callback, $event, 1);
-        @[$timestamp, $command, $arguments] = explode(' ', $event, 3);
+        @list($timestamp, $command, $arguments) = explode(' ', $event, 3);
 
-        return (object) [
+        return (object) array(
             'timestamp' => (float) $timestamp,
             'database' => $database,
             'client' => $client,
             'command' => substr($command, 1, -1),
             'arguments' => $arguments,
-        ];
+        );
     }
 }

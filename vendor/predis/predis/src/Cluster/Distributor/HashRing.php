@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -18,19 +17,21 @@ use Predis\Cluster\Hash\HashGeneratorInterface;
  * This class implements an hashring-based distributor that uses the same
  * algorithm of memcache to distribute keys in a cluster using client-side
  * sharding.
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  * @author Lorenzo Castelli <lcastelli@gmail.com>
  */
 class HashRing implements DistributorInterface, HashGeneratorInterface
 {
-    public const DEFAULT_REPLICAS = 128;
-    public const DEFAULT_WEIGHT = 100;
+    const DEFAULT_REPLICAS = 128;
+    const DEFAULT_WEIGHT = 100;
 
     private $ring;
     private $ringKeys;
     private $ringKeysCount;
     private $replicas;
     private $nodeHashCallback;
-    private $nodes = [];
+    private $nodes = array();
 
     /**
      * @param int   $replicas         Number of replicas in the ring.
@@ -52,10 +53,10 @@ class HashRing implements DistributorInterface, HashGeneratorInterface
     {
         // In case of collisions in the hashes of the nodes, the node added
         // last wins, thus the order in which nodes are added is significant.
-        $this->nodes[] = [
+        $this->nodes[] = array(
             'object' => $node,
             'weight' => (int) $weight ?: $this::DEFAULT_WEIGHT,
-        ];
+        );
 
         $this->reset();
     }
@@ -130,7 +131,7 @@ class HashRing implements DistributorInterface, HashGeneratorInterface
             throw new EmptyRingException('Cannot initialize an empty hashring.');
         }
 
-        $this->ring = [];
+        $this->ring = array();
         $totalWeight = $this->computeTotalWeight();
         $nodesCount = count($this->nodes);
 

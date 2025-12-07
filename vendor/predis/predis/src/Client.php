@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,12 +11,7 @@
 
 namespace Predis;
 
-use ArrayIterator;
-use InvalidArgumentException;
-use IteratorAggregate;
 use Predis\Command\CommandInterface;
-use Predis\Command\Container\ContainerFactory;
-use Predis\Command\Container\ContainerInterface;
 use Predis\Command\RawCommand;
 use Predis\Command\ScriptCommand;
 use Predis\Configuration\Options;
@@ -25,23 +19,13 @@ use Predis\Configuration\OptionsInterface;
 use Predis\Connection\ConnectionInterface;
 use Predis\Connection\Parameters;
 use Predis\Connection\ParametersInterface;
-use Predis\Connection\RelayConnection;
-use Predis\Consumer\PubSub\Consumer as PubSubConsumer;
-use Predis\Consumer\PubSub\RelayConsumer as RelayPubSubConsumer;
-use Predis\Consumer\Push\Consumer as PushConsumer;
 use Predis\Monitor\Consumer as MonitorConsumer;
-use Predis\Pipeline\Atomic;
-use Predis\Pipeline\FireAndForget;
 use Predis\Pipeline\Pipeline;
-use Predis\Pipeline\RelayAtomic;
-use Predis\Pipeline\RelayPipeline;
+use Predis\PubSub\Consumer as PubSubConsumer;
 use Predis\Response\ErrorInterface as ErrorResponseInterface;
 use Predis\Response\ResponseInterface;
 use Predis\Response\ServerException;
 use Predis\Transaction\MultiExec as MultiExecTransaction;
-use ReturnTypeWillChange;
-use RuntimeException;
-use Traversable;
 
 /**
  * Client class used for connecting and executing commands on Redis.
@@ -50,11 +34,13 @@ use Traversable;
  * abstractions are built. Internally it aggregates various other classes each
  * one with its own responsibility and scope.
  *
- * @template-implements \IteratorAggregate<string, static>
+ * {@inheritdoc}
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
-class Client implements ClientInterface, IteratorAggregate
+class Client implements ClientInterface, \IteratorAggregate
 {
-    public const VERSION = '3.3.0';
+    const VERSION = '2.0.0';
 
     /** @var OptionsInterface */
     private $options;
@@ -71,8 +57,8 @@ class Client implements ClientInterface, IteratorAggregate
      */
     public function __construct($parameters = null, $options = null)
     {
-        $this->options = static::createOptions($options ?? new Options());
-        $this->connection = static::createConnection($this->options, $parameters ?? new Parameters());
+        $this->options = static::createOptions($options ?? new Options);
+        $this->connection = static::createConnection($this->options, $parameters ?? new Parameters);
         $this->commands = $this->options->commands;
     }
 
@@ -81,8 +67,9 @@ class Client implements ClientInterface, IteratorAggregate
      *
      * @param array|OptionsInterface $options Set of client options
      *
+     * @throws \InvalidArgumentException
+     *
      * @return OptionsInterface
-     * @throws InvalidArgumentException
      */
     protected static function createOptions($options)
     {
@@ -91,7 +78,7 @@ class Client implements ClientInterface, IteratorAggregate
         } elseif ($options instanceof OptionsInterface) {
             return $options;
         } else {
-            throw new InvalidArgumentException('Invalid type for client options');
+            throw new \InvalidArgumentException('Invalid type for client options');
         }
     }
 
@@ -116,8 +103,9 @@ class Client implements ClientInterface, IteratorAggregate
      * @param OptionsInterface $options    Client options container
      * @param mixed            $parameters Connection parameters
      *
+     * @throws \InvalidArgumentException
+     *
      * @return ConnectionInterface
-     * @throws InvalidArgumentException
      */
     protected static function createConnection(OptionsInterface $options, $parameters)
     {
@@ -139,7 +127,7 @@ class Client implements ClientInterface, IteratorAggregate
             } elseif ($options->defined('aggregate') && $initializer = $options->aggregate) {
                 return $initializer($parameters, false);
             } else {
-                throw new InvalidArgumentException(
+                throw new \InvalidArgumentException(
                     'Array of connection parameters requires `cluster`, `replication` or `aggregate` client option'
                 );
             }
@@ -149,13 +137,13 @@ class Client implements ClientInterface, IteratorAggregate
             $connection = call_user_func($parameters, $options);
 
             if (!$connection instanceof ConnectionInterface) {
-                throw new InvalidArgumentException('Callable parameters must return a valid connection');
+                throw new \InvalidArgumentException('Callable parameters must return a valid connection');
             }
 
             return $connection;
         }
 
-        throw new InvalidArgumentException('Invalid type for connection parameters');
+        throw new \InvalidArgumentException('Invalid type for connection parameters');
     }
 
     /**
@@ -208,17 +196,17 @@ class Client implements ClientInterface, IteratorAggregate
     {
         $selector = strtolower($selector);
 
-        if (!in_array($selector, ['id', 'key', 'slot', 'role', 'alias', 'command'])) {
-            throw new InvalidArgumentException("Invalid selector type: `$selector`");
+        if (!in_array($selector, array('id', 'key', 'slot', 'role', 'alias', 'command'))) {
+            throw new \InvalidArgumentException("Invalid selector type: `$selector`");
         }
 
         if (!method_exists($this->connection, $method = "getConnectionBy$selector")) {
             $class = get_class($this->connection);
-            throw new InvalidArgumentException("Selecting connection by $selector is not supported by $class");
+            throw new \InvalidArgumentException("Selecting connection by $selector is not supported by $class");
         }
 
         if (!$connection = $this->connection->$method($value)) {
-            throw new InvalidArgumentException("Cannot find a connection by $selector matching `$value`");
+            throw new \InvalidArgumentException("Cannot find a connection by $selector matching `$value`");
         }
 
         return new static($connection, $this->getOptions());
@@ -270,32 +258,6 @@ class Client implements ClientInterface, IteratorAggregate
     }
 
     /**
-     * Applies the configured serializer and compression to given value.
-     *
-     * @param  mixed  $value
-     * @return string
-     */
-    public function pack($value)
-    {
-        return $this->connection instanceof RelayConnection
-            ? $this->connection->pack($value)
-            : $value;
-    }
-
-    /**
-     * Deserializes and decompresses to given value.
-     *
-     * @param  mixed  $value
-     * @return string
-     */
-    public function unpack($value)
-    {
-        return $this->connection instanceof RelayConnection
-            ? $this->connection->unpack($value)
-            : $value;
-    }
-
-    /**
      * Executes a command without filtering its arguments, parsing the response,
      * applying any prefix to keys or throwing exceptions on Redis errors even
      * regardless of client options.
@@ -341,37 +303,9 @@ class Client implements ClientInterface, IteratorAggregate
     /**
      * {@inheritdoc}
      */
-    public function createCommand($commandID, $arguments = [])
+    public function createCommand($commandID, $arguments = array())
     {
         return $this->commands->create($commandID, $arguments);
-    }
-
-    /**
-     * @param  string             $name
-     * @return ContainerInterface
-     */
-    public function __get(string $name)
-    {
-        return ContainerFactory::create($this, $name);
-    }
-
-    /**
-     * @param  string $name
-     * @param  mixed  $value
-     * @return mixed
-     */
-    public function __set(string $name, $value)
-    {
-        throw new RuntimeException('Not allowed');
-    }
-
-    /**
-     * @param  string $name
-     * @return mixed
-     */
-    public function __isset(string $name)
-    {
-        throw new RuntimeException('Not allowed');
     }
 
     /**
@@ -380,7 +314,6 @@ class Client implements ClientInterface, IteratorAggregate
     public function executeCommand(CommandInterface $command)
     {
         $response = $this->connection->executeCommand($command);
-        $parameters = $this->connection->getParameters();
 
         if ($response instanceof ResponseInterface) {
             if ($response instanceof ErrorResponseInterface) {
@@ -390,11 +323,7 @@ class Client implements ClientInterface, IteratorAggregate
             return $response;
         }
 
-        if ($parameters->protocol === 2) {
-            return $command->parseResponse($response);
-        }
-
-        return $command->parseResp3Response($response);
+        return $command->parseResponse($response);
     }
 
     /**
@@ -403,8 +332,9 @@ class Client implements ClientInterface, IteratorAggregate
      * @param CommandInterface       $command  Redis command that generated the error.
      * @param ErrorResponseInterface $response Instance of the error response.
      *
-     * @return mixed
      * @throws ServerException
+     *
+     * @return mixed
      */
     protected function onErrorResponse(CommandInterface $command, ErrorResponseInterface $response)
     {
@@ -427,7 +357,7 @@ class Client implements ClientInterface, IteratorAggregate
 
     /**
      * Executes the specified initializer method on `$this` by adjusting the
-     * actual invocation depending on the arity (0, 1 or 2 arguments). This is
+     * actual invokation depending on the arity (0, 1 or 2 arguments). This is
      * simply an utility method to create Redis contexts instances since they
      * follow a common initialization path.
      *
@@ -448,24 +378,26 @@ class Client implements ClientInterface, IteratorAggregate
                     : $this->$initializer(null, $argv[0]);
 
             case 2:
-                [$arg0, $arg1] = $argv;
+                list($arg0, $arg1) = $argv;
 
                 return $this->$initializer($arg0, $arg1);
 
+        // @codeCoverageIgnoreStart
             default:
                 return $this->$initializer($this, $argv);
         }
+        // @codeCoverageIgnoreEnd
     }
 
     /**
      * Creates a new pipeline context and returns it, or returns the results of
      * a pipeline executed inside the optionally provided callable object.
      *
-     * @param mixed ...$arguments Array of options, a callable for execution, or both.
+     * @param mixed ... Array of options, a callable for execution, or both.
      *
      * @return Pipeline|array
      */
-    public function pipeline(...$arguments)
+    public function pipeline(/* arguments */)
     {
         return $this->sharedContextFactory('createPipeline', func_get_args());
     }
@@ -473,29 +405,19 @@ class Client implements ClientInterface, IteratorAggregate
     /**
      * Actual pipeline context initializer method.
      *
-     * @param array|null $options  Options for the context.
-     * @param mixed      $callable Optional callable used to execute the context.
+     * @param array $options  Options for the context.
+     * @param mixed $callable Optional callable used to execute the context.
      *
      * @return Pipeline|array
      */
-    protected function createPipeline(?array $options = null, $callable = null)
+    protected function createPipeline(array $options = null, $callable = null)
     {
         if (isset($options['atomic']) && $options['atomic']) {
-            $class = Atomic::class;
+            $class = 'Predis\Pipeline\Atomic';
         } elseif (isset($options['fire-and-forget']) && $options['fire-and-forget']) {
-            $class = FireAndForget::class;
+            $class = 'Predis\Pipeline\FireAndForget';
         } else {
-            $class = Pipeline::class;
-        }
-
-        if ($this->connection instanceof RelayConnection) {
-            if (isset($options['atomic']) && $options['atomic']) {
-                $class = RelayAtomic::class;
-            } elseif (isset($options['fire-and-forget']) && $options['fire-and-forget']) {
-                throw new NotSupportedException('The "relay" extension does not support fire-and-forget pipelines.');
-            } else {
-                $class = RelayPipeline::class;
-            }
+            $class = 'Predis\Pipeline\Pipeline';
         }
 
         /*
@@ -514,11 +436,11 @@ class Client implements ClientInterface, IteratorAggregate
      * Creates a new transaction context and returns it, or returns the results
      * of a transaction executed inside the optionally provided callable object.
      *
-     * @param mixed ...$arguments Array of options, a callable for execution, or both.
+     * @param mixed ... Array of options, a callable for execution, or both.
      *
      * @return MultiExecTransaction|array
      */
-    public function transaction(...$arguments)
+    public function transaction(/* arguments */)
     {
         return $this->sharedContextFactory('createTransaction', func_get_args());
     }
@@ -526,12 +448,12 @@ class Client implements ClientInterface, IteratorAggregate
     /**
      * Actual transaction context initializer method.
      *
-     * @param array|null $options  Options for the context.
-     * @param mixed      $callable Optional callable used to execute the context.
+     * @param array $options  Options for the context.
+     * @param mixed $callable Optional callable used to execute the context.
      *
      * @return MultiExecTransaction|array
      */
-    protected function createTransaction(?array $options = null, $callable = null)
+    protected function createTransaction(array $options = null, $callable = null)
     {
         $transaction = new MultiExecTransaction($this, $options);
 
@@ -546,41 +468,26 @@ class Client implements ClientInterface, IteratorAggregate
      * Creates a new publish/subscribe context and returns it, or starts its loop
      * inside the optionally provided callable object.
      *
-     * @param mixed ...$arguments Array of options, a callable for execution, or both.
+     * @param mixed ... Array of options, a callable for execution, or both.
      *
      * @return PubSubConsumer|null
      */
-    public function pubSubLoop(...$arguments)
+    public function pubSubLoop(/* arguments */)
     {
         return $this->sharedContextFactory('createPubSub', func_get_args());
     }
 
     /**
-     * Creates new push notifications consumer.
-     *
-     * @param  callable|null $preLoopCallback Callback that should be called on client before enter a loop.
-     * @return PushConsumer
-     */
-    public function push(?callable $preLoopCallback = null): PushConsumer
-    {
-        return new PushConsumer($this, $preLoopCallback);
-    }
-
-    /**
      * Actual publish/subscribe context initializer method.
      *
-     * @param array|null $options  Options for the context.
-     * @param mixed      $callable Optional callable used to execute the context.
+     * @param array $options  Options for the context.
+     * @param mixed $callable Optional callable used to execute the context.
      *
      * @return PubSubConsumer|null
      */
-    protected function createPubSub(?array $options = null, $callable = null)
+    protected function createPubSub(array $options = null, $callable = null)
     {
-        if ($this->connection instanceof RelayConnection) {
-            $pubsub = new RelayPubSubConsumer($this, $options);
-        } else {
-            $pubsub = new PubSubConsumer($this, $options);
-        }
+        $pubsub = new PubSubConsumer($this, $options);
 
         if (!isset($callable)) {
             return $pubsub;
@@ -591,8 +498,6 @@ class Client implements ClientInterface, IteratorAggregate
                 $pubsub->stop();
             }
         }
-
-        return null;
     }
 
     /**
@@ -606,24 +511,24 @@ class Client implements ClientInterface, IteratorAggregate
     }
 
     /**
-     * @return Traversable<string, static>
+     * {@inheritdoc}
      */
-    #[ReturnTypeWillChange]
+    #[\ReturnTypeWillChange]
     public function getIterator()
     {
-        $clients = [];
+        $clients = array();
         $connection = $this->getConnection();
 
-        if (!$connection instanceof Traversable) {
-            return new ArrayIterator([
-                (string) $connection => new static($connection, $this->getOptions()),
-            ]);
+        if (!$connection instanceof \Traversable) {
+            return new \ArrayIterator(array(
+                (string) $connection => new static($connection, $this->getOptions())
+            ));
         }
 
         foreach ($connection as $node) {
             $clients[(string) $node] = new static($node, $this->getOptions());
         }
 
-        return new ArrayIterator($clients);
+        return new \ArrayIterator($clients);
     }
 }

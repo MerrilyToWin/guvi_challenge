@@ -3,8 +3,7 @@
 /*
  * This file is part of the Predis package.
  *
- * (c) 2009-2020 Daniele Alessandri
- * (c) 2021-2025 Till Krüss
+ * (c) Daniele Alessandri <suppakilla@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -18,13 +17,15 @@ namespace Predis\Command;
  * A command factory is used through the library to create instances of commands
  * classes implementing Predis\Command\CommandInterface mapped to Redis commands
  * by their command ID string (SET, GET, etc...).
+ *
+ * @author Daniele Alessandri <suppakilla@gmail.com>
  */
 interface FactoryInterface
 {
     /**
      * Checks if the command factory supports the specified list of commands.
      *
-     * @param string ...$commandIDs List of command IDs
+     * @param array $commandIDs List of command IDs
      *
      * @return bool
      */
@@ -38,5 +39,5 @@ interface FactoryInterface
      *
      * @return CommandInterface
      */
-    public function create(string $commandID, array $arguments = []): CommandInterface;
+    public function create(string $commandID, array $arguments = array()): CommandInterface;
 }

@@ -1,30 +1,4 @@
-// js/profile.js
-
-// 1) Banner & profile image preview (front-end only)
-const bannerEl = document.getElementById('banner');
-const bannerInput = document.getElementById('bannerInput');
-const profileEl = document.getElementById('profileImage');
-const profileInput = document.getElementById('profileInput');
-
-if (bannerInput) {
-  bannerInput.addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (file) {
-      bannerEl.style.backgroundImage = `url(${URL.createObjectURL(file)})`;
-    }
-  });
-}
-
-if (profileInput) {
-  profileInput.addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (file) {
-      profileEl.style.backgroundImage = `url(${URL.createObjectURL(file)})`;
-    }
-  });
-}
-
-// 2) jQuery logic for profile data & auth
+// jQuery logic for profile data & auth
 $(function () {
   const token = localStorage.getItem('sessionToken');
 
@@ -58,15 +32,6 @@ $(function () {
       $('#age').val(profile.age || '');
       $('#dob').val(profile.dob || '');
       $('#contact').val(profile.contact || '');
-
-      // Images from Mongo (paths)
-      if (profile.banner_pic) {
-        $('#banner').css('background-image', `url(${profile.banner_pic})`);
-      }
-      if (profile.profile_pic) {
-        $('#profileImage').css('background-image', `url(${profile.profile_pic})`);
-      }
-
       $('#profileMsg').text('');
     },
     error: function (jqXHR, textStatus, errorThrown) {
@@ -90,14 +55,7 @@ $(function () {
     formData.append('age', age);
     formData.append('dob', dob);
     formData.append('contact', contact);
-
-    if (profileInput && profileInput.files[0]) {
-      formData.append('profile_image', profileInput.files[0]);
-    }
-    if (bannerInput && bannerInput.files[0]) {
-      formData.append('banner_image', bannerInput.files[0]);
-    }
-
+    
     $.ajax({
       url: 'php/profile.php',
       method: 'POST',

@@ -2,27 +2,27 @@
 // php/profile.php
 header('Content-Type: application/json');
 
-ini_set('display_errors', 1);          // dev only
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// Log errors, don't throw them into JSON
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/../logs/profile_error.log');
 
 require __DIR__ . '/../vendor/autoload.php';
 
 use Predis\Client as PredisClient;
 use MongoDB\Client as MongoClient;
 
-// ---------------------------------------------------------------------
-// Helper: send JSON and exit
-// ---------------------------------------------------------------------
+// Small helper for JSON responses
 function json_response(array $payload, int $code = 200): void {
     http_response_code($code);
     echo json_encode($payload);
     exit;
 }
 
-// ---------------------------------------------------------------------
-// 1) Redis connection  (token -> session)
-// ---------------------------------------------------------------------
+// -------------------
+// 1) Redis connection (sessions)
+// -------------------
 try {
     $redis = new PredisClient([
         'scheme' => 'tcp',
@@ -32,15 +32,13 @@ try {
 } catch (Exception $e) {
     json_response([
         'success' => false,
-        'message' => 'Redis connection failed: ' . $e->getMessage()
+        'message' => 'Redis connection failed'
     ], 500);
 }
 
-// ---------------------------------------------------------------------
-// 2) MongoDB connection  (profile storage)
-//     DB: guvi_app
-//     Collection: profiles
-// ---------------------------------------------------------------------
+// -------------------
+// 2) MongoDB connection (profile data)
+// -------------------
 try {
     $mongoClient = new MongoClient("mongodb://127.0.0.1:27017");
     $mongoDb = $mongoClient->selectDatabase('guvi_app');
@@ -48,15 +46,13 @@ try {
 } catch (Exception $e) {
     json_response([
         'success' => false,
-        'message' => 'MongoDB connection failed: ' . $e->getMessage()
+        'message' => 'MongoDB connection failed'
     ], 500);
 }
 
-// ---------------------------------------------------------------------
-// Helper: get session from Redis by token
-// Redis value format (JSON string):
-//  { "user_id": 1, "name": "Merwin", "email": "x@y.com" }
-// ---------------------------------------------------------------------
+// -------------------
+// 3) Session helper
+// -------------------
 function getSessionUser(PredisClient $redis, ?string $token): ?array {
     if (!$token) return null;
     $data = $redis->get("session:$token");
@@ -66,9 +62,9 @@ function getSessionUser(PredisClient $redis, ?string $token): ?array {
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// =====================================================================
-// GET  → Return profile data from Redis + MongoDB
-// =====================================================================
+// =======================================================
+// GET → Fetch profile (name/email from Redis, age/dob/contact from Mongo)
+// =======================================================
 if ($method === 'GET') {
     $token   = $_GET['token'] ?? '';
     $session = getSessionUser($redis, $token);
@@ -76,42 +72,35 @@ if ($method === 'GET') {
     if (!$session) {
         json_response([
             'success' => false,
-            'message' => 'Invalid or expired session (token not found in Redis)'
-        ]);
+            'message' => 'Invalid or expired session'
+        ], 401);
     }
 
     $userId = (int)($session['user_id'] ?? 0);
-    if ($userId <= 0) {
-        json_response([
-            'success' => false,
-            'message' => 'Session missing user_id'
-        ]);
-    }
 
-    // Fetch profile from MongoDB by user_id
-    $profileDoc = $profilesCollection->findOne(['user_id' => $userId]) ?? null;
+    // Fetch profile from MongoDB
+    $doc = $profilesCollection->findOne(['user_id' => $userId]) ?? [];
 
     $profile = [
-        // from Redis session (MySQL-based auth)
-        'name'        => $session['name']  ?? null,
-        'email'       => $session['email'] ?? null,
-
-        // from Mongo profile doc
-        'age'         => $profileDoc['age']         ?? null,
-        'dob'         => $profileDoc['dob']         ?? null,
-        'contact'     => $profileDoc['contact']     ?? null,
-        'profile_pic' => $profileDoc['profile_pic'] ?? null,
-        'banner_pic'  => $profileDoc['banner_pic']  ?? null,
+        'name'    => $session['name']  ?? null,  // from Redis session
+        'email'   => $session['email'] ?? null,  // from Redis session
+        'age'     => $doc['age']       ?? null,  // from Mongo
+        'dob'     => $doc['dob']       ?? null,
+        'contact' => $doc['contact']   ?? null,
+        // No profile_pic / banner_pic fields anymore
     ];
 
-    json_response(['success' => true, 'profile' => $profile]);
+    json_response([
+        'success' => true,
+        'profile' => $profile
+    ]);
 }
 
-// =====================================================================
-// POST → Update profile in MongoDB OR logout
-// =====================================================================
+// =======================================================
+// POST → Update age, dob, contact in Mongo (NO images)
+// =======================================================
 if ($method === 'POST') {
-    // ----- LOGOUT branch -----
+    // Logout branch
     if (!empty($_POST['logout'])) {
         $token = $_POST['token'] ?? '';
         if ($token) {
@@ -120,26 +109,18 @@ if ($method === 'POST') {
         json_response(['success' => true, 'message' => 'Logged out']);
     }
 
-    // ----- UPDATE PROFILE branch -----
     $token   = $_POST['token'] ?? '';
     $session = getSessionUser($redis, $token);
 
     if (!$session) {
         json_response([
             'success' => false,
-            'message' => 'Invalid or expired session on update'
-        ]);
+            'message' => 'Invalid or expired session'
+        ], 401);
     }
 
     $userId = (int)($session['user_id'] ?? 0);
-    if ($userId <= 0) {
-        json_response([
-            'success' => false,
-            'message' => 'Session missing user_id on update'
-        ]);
-    }
 
-    // Values from form
     $age     = $_POST['age'] ?? null;
     $dob     = $_POST['dob'] ?? null;
     $contact = $_POST['contact'] ?? null;
@@ -150,65 +131,29 @@ if ($method === 'POST') {
         $age = null;
     }
 
-    // Existing Mongo doc (to keep old image paths if no new upload)
-    $existing = $profilesCollection->findOne(['user_id' => $userId]) ?? [];
+    try {
+        $profilesCollection->updateOne(
+            ['user_id' => $userId],
+            [
+                '$set' => [
+                    'user_id' => $userId,
+                    'age'     => $age,
+                    'dob'     => $dob,
+                    'contact' => $contact,
+                    // No profile_pic / banner_pic here
+                ]
+            ],
+            ['upsert' => true]
+        );
 
-    $profilePicPath = $existing['profile_pic'] ?? null;
-    $bannerPicPath  = $existing['banner_pic'] ?? null;
-
-    // Directory for uploads (relative to project root)
-    $uploadDir = realpath(__DIR__ . '/..') . DIRECTORY_SEPARATOR . 'uploads';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
+        json_response(['success' => true, 'message' => 'Profile updated']);
+    } catch (Exception $e) {
+        json_response([
+            'success' => false,
+            'message' => 'Profile update failed'
+        ], 500);
     }
-
-    // Handle profile image upload
-    if (!empty($_FILES['profile_image']['tmp_name'])) {
-        $ext      = pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION);
-        $filename = 'profile_' . $userId . '_' . time() . '.' . $ext;
-        $target   = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-
-        if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $target)) {
-            // path that front-end can use
-            $profilePicPath = 'uploads/' . $filename;
-        }
-    }
-
-    // Handle banner image upload
-    if (!empty($_FILES['banner_image']['tmp_name'])) {
-        $ext      = pathinfo($_FILES['banner_image']['name'], PATHINFO_EXTENSION);
-        $filename = 'banner_' . $userId . '_' . time() . '.' . $ext;
-        $target   = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-
-        if (move_uploaded_file($_FILES['banner_image']['tmp_name'], $target)) {
-            $bannerPicPath = 'uploads/' . $filename;
-        }
-    }
-
-    // Data to upsert into MongoDB
-    $setData = [
-        'user_id' => $userId,
-        'age'     => $age,
-        'dob'     => $dob,
-        'contact' => $contact,
-    ];
-
-    if ($profilePicPath) {
-        $setData['profile_pic'] = $profilePicPath;
-    }
-    if ($bannerPicPath) {
-        $setData['banner_pic'] = $bannerPicPath;
-    }
-
-    // Upsert profile
-    $profilesCollection->updateOne(
-        ['user_id' => $userId],
-        ['$set' => $setData],
-        ['upsert' => true]
-    );
-
-    json_response(['success' => true, 'message' => 'Profile updated']);
 }
 
-// Any other HTTP method:
+// Fallback for other HTTP methods
 json_response(['success' => false, 'message' => 'Invalid method'], 405);

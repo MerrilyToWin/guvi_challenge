@@ -1,6 +1,6 @@
 {
     "require": {
-        "predis/predis": "2.0",
-        "mongodb/mongodb": "2.1"
+        "predis/predis": "^3.3",
+        "mongodb/mongodb": "^2.1"
     }
 }

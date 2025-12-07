@@ -18,6 +18,7 @@ namespace Predis\Connection;
  *
  * @author Daniele Alessandri <suppakilla@gmail.com>
  */
+#[\AllowDynamicProperties]
 class Parameters implements ParametersInterface
 {
     protected static $defaults = array(

@@ -2,13 +2,22 @@
 // php/register.php
 header('Content-Type: application/json');
 
-// Log errors, but don't print them into the JSON response
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/../logs/register_error.log');
 
 require __DIR__ . '/../vendor/autoload.php';
+
+// Helper: strong password check
+function is_strong_password(string $password): bool {
+    if (strlen($password) < 12) return false;              // min length
+    if (!preg_match('/[A-Z]/', $password)) return false;   // at least one uppercase
+    if (!preg_match('/[a-z]/', $password)) return false;   // at least one lowercase
+    if (!preg_match('/\d/', $password)) return false;      // at least one digit
+    if (!preg_match('/[^A-Za-z0-9]/', $password)) return false; // at least one special
+    return true;
+}
 
 // --- Allow only POST ---
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -20,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// --- MySQL connection (same settings you used before) ---
+// --- MySQL connection ---
 try {
     $pdo = new PDO(
         'mysql:host=localhost;dbname=guvi_app;charset=utf8mb4',
@@ -61,6 +70,17 @@ if ($password !== $confirm) {
     exit;
 }
 
+// NEW: enforce password policy on server-side
+if (!is_strong_password($password)) {
+    echo json_encode([
+        'success' => false,
+        'message' =>
+            'Password must be at least 12 characters and include one uppercase letter, ' .
+            'one lowercase letter, one number, and one special character.'
+    ]);
+    exit;
+}
+
 // --- Check if email already exists ---
 try {
     $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
@@ -73,7 +93,6 @@ try {
     // --- Insert new user ---
     $hash = password_hash($password, PASSWORD_BCRYPT);
 
-    // Adjust column names if your table is different
     $insert = $pdo->prepare(
         'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'
     );

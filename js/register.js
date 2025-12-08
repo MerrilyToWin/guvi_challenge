@@ -1,5 +1,17 @@
 // js/register.js
 $(function () {
+
+  // Helper: check password strength
+  function isStrongPassword(password) {
+    const hasMinLength = password.length >= 12;
+    const hasUpper     = /[A-Z]/.test(password);
+    const hasLower     = /[a-z]/.test(password);
+    const hasNumber    = /[0-9]/.test(password);
+    const hasSpecial   = /[^A-Za-z0-9]/.test(password); // any non-alphanumeric
+
+    return hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
+  }
+
   // Toggle main password visibility
   $('#togglePassword').on('click', function () {
     const input = $('#password');
@@ -36,6 +48,15 @@ $(function () {
       return;
     }
 
+    // NEW: password policy check
+    if (!isStrongPassword(password)) {
+      $('#registerMsg').text(
+        'Password must be at least 12 characters and include ' +
+        'one uppercase letter, one lowercase letter, one number, and one special character.'
+      );
+      return;
+    }
+
     $('#registerMsg').text('Registering...');
 
     $.ajax({
@@ -46,7 +67,7 @@ $(function () {
         name: name,
         email: email,
         password: password,
-        confirm: confirm        // <-- IMPORTANT
+        confirm: confirm
       },
       success: function (res) {
         console.log('REGISTER RESPONSE:', res);
